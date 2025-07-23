@@ -51,7 +51,7 @@ def get_stock_data(stock_code):
     try:
         start_date = "20240901"
         end_date = datetime.now().strftime('%Y%m%d')
-        
+        #end_date = "20250721"
         # 使用akshare获取股票数据
         df = ak.stock_zh_a_hist(symbol=stock_code, period="daily", start_date=start_date, end_date=end_date, adjust="")
         
@@ -76,7 +76,8 @@ def get_stock_data(stock_code):
         # 只保留需要的列
         df = df[['open', 'high', 'low', 'close', 'volume']]
         
-        return df
+        # 返回数据和end_date
+        return {'data': df, 'end_date': end_date}
     except Exception as e:
         log_stock_analysis(f"获取股票数据失败 {stock_code}: {e}", 'error')
         return None
@@ -95,7 +96,7 @@ def get_all_stocks():
         
         # 读取补充股票数据
         try:
-            supplement_data = pd.read_csv('datas/supplement.csv', encoding='utf-8', dtype={'code': str})
+            supplement_data = pd.read_csv('D:\stockchoice\stock-picking\datas\supplement.csv', encoding='utf-8', dtype={'code': str})
             log_stock_analysis(f"成功读取补充股票数据: {len(supplement_data)} 只股票")
             
             # 合并到主数据中
@@ -445,12 +446,12 @@ def calculate_macd_indicators(df):
 
 def analyze_stock_signals(stock_code, stock_name):
     """分析单个股票的信号"""
-    df = get_stock_data(stock_code)
-    if df is None or len(df) < 120:  # 确保有足够的数据进行分析
+    result = get_stock_data(stock_code)
+    if result is None or len(result['data']) < 120:  # 确保有足够的数据进行分析
         return None
     
     try:
-        df = calculate_macd_indicators(df)
+        df = calculate_macd_indicators(result['data'])
         latest = df.iloc[-1]  # 获取最新一天的数据
         
         signals = {
@@ -494,6 +495,17 @@ def get_all_stock_signals():
     logger = setup_logger_and_log_stocks(stocks)
     if stocks is None:
         return []
+    
+    # 从第一个股票获取end_date
+    end_date = None
+    if len(stocks) > 0:
+        first_stock_result = get_stock_data(stocks.iloc[0]['code'])
+        if first_stock_result is not None:
+            end_date = first_stock_result['end_date']
+    
+    # 如果没有获取到end_date，使用当前日期作为默认值
+    if end_date is None:
+        end_date = datetime.now().strftime('%Y%m%d')
     
     all_signals = []
     total = len(stocks)
@@ -547,4 +559,7 @@ def get_all_stock_signals():
     log_stock_analysis(f"处理完成! 总用时: {total_time}秒")
     log_stock_analysis(f"成功处理: {len(all_signals)}/{total} 只股票")
     
-    return all_signals 
+    return {
+        'signals': all_signals,
+        'end_date': end_date
+    } 
